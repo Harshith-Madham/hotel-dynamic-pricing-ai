@@ -41,3 +41,27 @@ class RoomType(RoomTypeBase):
 
     class Config:
         from_attributes = True
+
+
+# ---------- BOOKING SCHEMAS ----------
+
+class BookingBase(BaseModel):
+    hotel_id: int
+    room_type_id: int
+    booking_date: date
+    check_in_date: date
+    check_out_date: date
+    status: str
+    price_sold: float
+
+
+class BookingCreate(BookingBase):
+    """Schema used when creating a new booking."""
+    pass
+
+
+class Booking(BookingBase):
+    id: int
+
+    class Config:
+        from_attributes = True

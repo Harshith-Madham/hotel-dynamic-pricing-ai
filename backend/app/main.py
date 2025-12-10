@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models
@@ -47,10 +47,11 @@ def create_room_type(
     room_type: schemas.RoomTypeCreate,
     db: Session = Depends(get_db),
 ):
-    # Ensure hotel exists (basic check)
+       # Ensure hotel exists (basic check)
     hotel = db.query(models.Hotel).filter(models.Hotel.id == room_type.hotel_id).first()
     if hotel is None:
-        raise ValueError("Hotel not found")  # we’ll improve error handling later
+        raise HTTPException(status_code=404, detail="Hotel not found")
+
 
     db_room_type = models.RoomType(
         hotel_id=room_type.hotel_id,
@@ -78,3 +79,53 @@ def list_room_types_for_hotel(hotel_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return room_types
+
+
+@app.post("/bookings", response_model=schemas.Booking)
+def create_booking(
+    booking: schemas.BookingCreate,
+    db: Session = Depends(get_db),
+):
+    # Ensure hotel exists
+    hotel = db.query(models.Hotel).filter(models.Hotel.id == booking.hotel_id).first()
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+
+    # Ensure room type exists and belongs to the same hotel
+    room_type = (
+        db.query(models.RoomType)
+        .filter(models.RoomType.id == booking.room_type_id)
+        .first()
+    )
+    if room_type is None or room_type.hotel_id != booking.hotel_id:
+        raise HTTPException(status_code=400, detail="Invalid room type for this hotel")
+
+    db_booking = models.Booking(
+        hotel_id=booking.hotel_id,
+        room_type_id=booking.room_type_id,
+        booking_date=booking.booking_date,
+        check_in_date=booking.check_in_date,
+        check_out_date=booking.check_out_date,
+        status=booking.status,
+        price_sold=booking.price_sold,
+    )
+    db.add(db_booking)
+    db.commit()
+    db.refresh(db_booking)
+    return db_booking
+
+
+@app.get("/bookings", response_model=list[schemas.Booking])
+def list_bookings(db: Session = Depends(get_db)):
+    bookings = db.query(models.Booking).all()
+    return bookings
+
+
+@app.get("/hotels/{hotel_id}/bookings", response_model=list[schemas.Booking])
+def list_bookings_for_hotel(hotel_id: int, db: Session = Depends(get_db)):
+    bookings = (
+        db.query(models.Booking)
+        .filter(models.Booking.hotel_id == hotel_id)
+        .all()
+    )
+    return bookings
