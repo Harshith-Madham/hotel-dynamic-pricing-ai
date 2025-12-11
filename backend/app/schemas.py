@@ -65,3 +65,22 @@ class Booking(BookingBase):
 
     class Config:
         from_attributes = True
+
+# ---------- PRICE RECOMMENDATION SCHEMAS ----------
+
+class PriceRecommendationRequest(BaseModel):
+    hotel_id: int
+    room_type_id: int
+    check_in_date: date
+    stay_length: int = 1
+    booking_window: int = 7  # days between booking creation and check-in
+
+
+class PriceRecommendationResponse(BaseModel):
+    hotel_id: int
+    room_type_id: int
+    check_in_date: date
+    recommended_price: float
+    model_price: float
+    base_price: float
+    currency: str = "USD"

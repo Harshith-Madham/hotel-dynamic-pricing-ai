@@ -5,6 +5,7 @@ from app import models
 from app.database import engine
 from app import schemas
 from app.dependencies import get_db
+from app.ml.predict import predict_price_for_stay
 
 
 app = FastAPI(title="SmartRate AI - Hotel Pricing API")
@@ -129,3 +130,49 @@ def list_bookings_for_hotel(hotel_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return bookings
+
+
+@app.post("/price-recommendation", response_model=schemas.PriceRecommendationResponse)
+def get_price_recommendation(
+    payload: schemas.PriceRecommendationRequest,
+    db: Session = Depends(get_db),
+):
+    # Fetch hotel
+    hotel = db.query(models.Hotel).filter(models.Hotel.id == payload.hotel_id).first()
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel not found")
+
+    # Fetch room type
+    room_type = (
+        db.query(models.RoomType)
+        .filter(models.RoomType.id == payload.room_type_id)
+        .first()
+    )
+    if room_type is None or room_type.hotel_id != payload.hotel_id:
+        raise HTTPException(status_code=400, detail="Invalid room type for this hotel")
+
+    # Use ML model to predict a price
+    model_price = predict_price_for_stay(
+        city=hotel.city,
+        room_type_name=room_type.name,
+        base_price=room_type.base_price,
+        room_capacity=room_type.capacity,
+        check_in_date=payload.check_in_date,
+        stay_length=payload.stay_length,
+        booking_window=payload.booking_window,
+    )
+
+    # Simple business rule: clamp around base price
+    lower_bound = room_type.base_price * 0.7
+    upper_bound = room_type.base_price * 1.8
+    recommended_price = max(lower_bound, min(model_price, upper_bound))
+
+    return schemas.PriceRecommendationResponse(
+        hotel_id=payload.hotel_id,
+        room_type_id=payload.room_type_id,
+        check_in_date=payload.check_in_date,
+        recommended_price=round(recommended_price, 2),
+        model_price=round(model_price, 2),
+        base_price=room_type.base_price,
+        currency="USD",  # or make this configurable later
+    )
