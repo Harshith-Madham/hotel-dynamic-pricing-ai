@@ -6,9 +6,20 @@ from app.database import engine
 from app import schemas
 from app.dependencies import get_db
 from app.ml.predict import predict_price_for_stay
+from fastapi.middleware.cors import CORSMiddleware
+
 
 
 app = FastAPI(title="SmartRate AI - Hotel Pricing API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
